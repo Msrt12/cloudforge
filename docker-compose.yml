@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: cloudforge-postgres
+
+    environment:
+      POSTGRES_USER: cloudforge
+      POSTGRES_PASSWORD: cloudforge
+      POSTGRES_DB: cloudforge
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: cloudforge-backend
+
+    environment:
+      DATABASE_URL: postgresql://cloudforge:cloudforge@postgres:5432/cloudforge
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
