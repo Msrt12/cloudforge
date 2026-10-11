@@ -1,0 +1,19 @@
+image:
+  repository: europe-west3-docker.pkg.dev/gc-bootcamp-n88ytomx-506210/cloudforge/cloudforge-backend
+  tag: v3
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+gcpServiceAccount: cloudforge-dev-backend-sa@gc-bootcamp-n88ytomx-506210.iam.gserviceaccount.com
+
+cloudSql:
+  instanceConnectionName: gc-bootcamp-n88ytomx-506210:europe-west3:cloudforge-dev-postgres
+  port: 5432
+
+projectId: gc-bootcamp-n88ytomx-506210

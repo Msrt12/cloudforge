@@ -4,6 +4,11 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 
+from kubernetes import client
+from kubernetes.client.exceptions import ApiException
+
+from ..kubernetes_client import apps_v1, core_v1
+
 
 router = APIRouter(
     prefix="/applications",
@@ -70,22 +75,18 @@ def deploy_application(
     deploy: schemas.DeployRequest,
     db: Session = Depends(get_db)
 ):
-    # Знаходимо application по ID
     application = (
         db.query(models.Application)
         .filter(models.Application.id == application_id)
         .first()
     )
 
-    # Якщо application не існує
     if application is None:
         raise HTTPException(
             status_code=404,
             detail="Application not found"
         )
 
-    # Знаходимо потрібне environment:
-    # dev / staging / prod
     environment = (
         db.query(models.Environment)
         .filter(
@@ -95,29 +96,125 @@ def deploy_application(
         .first()
     )
 
-    # Якщо environment не існує
     if environment is None:
         raise HTTPException(
             status_code=404,
             detail="Environment not found"
         )
 
-    # Стару версію запам'ятовуємо для можливого rollback
+    if deploy.environment != "dev":
+        raise HTTPException(
+            status_code=400,
+            detail="Direct deployment is currently allowed only to dev"
+        )
+
+    namespace = "dev"
+    deployment_name = application.name
+
+    image = f"{application.repository}:{deploy.version}"
+
+    labels = {
+        "app": application.name
+    }
+
+    container = client.V1Container(
+        name=application.name,
+        image=image,
+        ports=[
+            client.V1ContainerPort(
+                container_port=8000
+            )
+        ]
+    )
+
+    pod_template = client.V1PodTemplateSpec(
+        metadata=client.V1ObjectMeta(
+            labels=labels
+        ),
+        spec=client.V1PodSpec(
+            containers=[container]
+        )
+    )
+
+    deployment_spec = client.V1DeploymentSpec(
+        replicas=environment.min_replicas,
+        selector=client.V1LabelSelector(
+            match_labels=labels
+        ),
+        template=pod_template
+    )
+
+    deployment_body = client.V1Deployment(
+        metadata=client.V1ObjectMeta(
+            name=deployment_name
+        ),
+        spec=deployment_spec
+    )
+
+    try:
+        apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+        apps_v1.replace_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace,
+            body=deployment_body
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            apps_v1.create_namespaced_deployment(
+                namespace=namespace,
+                body=deployment_body
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Kubernetes deployment error: {error.reason}"
+            )
+
+    service_body = client.V1Service(
+        metadata=client.V1ObjectMeta(
+            name=deployment_name
+        ),
+        spec=client.V1ServiceSpec(
+            selector=labels,
+            ports=[
+                client.V1ServicePort(
+                    port=80,
+                    target_port=8000
+                )
+            ]
+        )
+    )
+
+    try:
+        core_v1.read_namespaced_service(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            core_v1.create_namespaced_service(
+                namespace=namespace,
+                body=service_body
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Kubernetes service error: {error.reason}"
+            )
+
     environment.previous_version = environment.current_version
-
-    # Встановлюємо нову версію
     environment.current_version = deploy.version
-
-    # Змінюємо статус
     environment.status = "deployed"
 
-    # Записуємо зміни в БД
     db.commit()
-
-    # Оновлюємо Python-об'єкт даними з БД
     db.refresh(environment)
 
-    # Повертаємо результат
     return {
         "message": "Deployment completed",
         "application": application.name,
@@ -126,7 +223,6 @@ def deploy_application(
         "previous_version": environment.previous_version,
         "status": environment.status
     }
-
 
 @router.post("/{application_id}/promote")
 def promote_application(

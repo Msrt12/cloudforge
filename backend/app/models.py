@@ -21,7 +21,7 @@ class Application(Base):
     )
 
     environments = relationship(
-        "Environment",
+        "Enviro nment",
         back_populates="application",
         cascade="all, delete-orphan"
     )

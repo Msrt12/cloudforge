@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ .Release.Name }}
+  namespace: platform
+  labels:
+    app: {{ .Release.Name }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+
+    spec:
+      serviceAccountName: cloudforge-backend
+
+      volumes:
+        - name: cloudforge-secrets
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: cloudforge-secrets
+
+      containers:
+
+        # CloudForge FastAPI application
+        - name: cloudforge
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+
+          volumeMounts:
+            - name: cloudforge-secrets
+              mountPath: "/var/secrets"
+              readOnly: true
+
+        # Cloud SQL Auth Proxy
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.18.2
+
+          args:
+            - "--private-ip"
+            - "--port={{ .Values.cloudSql.port }}"
+            - "{{ .Values.cloudSql.instanceConnectionName }}"
+
+          securityContext:
+            runAsNonRoot: true
