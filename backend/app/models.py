@@ -21,7 +21,7 @@ class Application(Base):
     )
 
     environments = relationship(
-        "Enviro nment",
+        "Environment",
         back_populates="application",
         cascade="all, delete-orphan"
     )
@@ -53,10 +53,6 @@ class Environment(Base):
         nullable=True
     )
 
-    previous_version = Column(
-    String,
-    nullable=True
-    )
 
     status = Column(
         String,

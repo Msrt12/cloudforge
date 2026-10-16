@@ -423,3 +423,166 @@ def update_scaling(
         "max_replicas": environment.max_replicas,
         "target_cpu": environment.target_cpu
     }
+
+
+
+
+@router.patch("/{application_id}/scaling")
+def update_scaling(
+    application_id: int,
+    scaling: schemas.ScalingRequest,
+    db: Session = Depends(get_db)
+):
+
+    application = (
+        db.query(models.Application)
+        .filter(models.Application.id == application_id)
+        .first()
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found"
+        )
+
+    environment = (
+        db.query(models.Environment)
+        .filter(
+            models.Environment.application_id == application_id,
+            models.Environment.name == scaling.environment
+        )
+        .first()
+    )
+
+    if environment is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Environment not found"
+        )
+
+    if scaling.min_replicas < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="min_replicas must be at least 1"
+        )
+
+    if scaling.max_replicas < scaling.min_replicas:
+        raise HTTPException(
+            status_code=400,
+            detail="max_replicas must be >= min_replicas"
+        )
+
+    if not 1 <= scaling.target_cpu <= 100:
+        raise HTTPException(
+            status_code=400,
+            detail="target_cpu must be between 1 and 100"
+        )
+
+    if scaling.environment != "dev":
+        raise HTTPException(
+            status_code=400,
+            detail="Scaling is currently supported only in dev"
+        )
+
+    namespace = "dev"
+    deployment_name = application.name
+
+    try:
+        apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Deployment not found. Deploy application first."
+            )
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Kubernetes Deployment error: {error.reason}"
+        )
+
+    hpa_body = client.V2HorizontalPodAutoscaler(
+        metadata=client.V1ObjectMeta(
+            name=deployment_name
+        ),
+        spec=client.V2HorizontalPodAutoscalerSpec(
+            scale_target_ref=client.V2CrossVersionObjectReference(
+                api_version="apps/v1",
+                kind="Deployment",
+                name=deployment_name
+            ),
+            min_replicas=scaling.min_replicas,
+            max_replicas=scaling.max_replicas,
+            metrics=[
+                client.V2MetricSpec(
+                    type="Resource",
+                    resource=client.V2ResourceMetricSource(
+                        name="cpu",
+                        target=client.V2MetricTarget(
+                            type="Utilization",
+                            average_utilization=scaling.target_cpu
+                        )
+                    )
+                )
+            ]
+        )
+    )
+
+    try:
+        autoscaling_v2.read_namespaced_horizontal_pod_autoscaler(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status != 404:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Kubernetes HPA read error: {error.reason}"
+            )
+        try:
+            autoscaling_v2.create_namespaced_horizontal_pod_autoscaler(
+                namespace=namespace,
+                body=hpa_body
+            )
+
+        except ApiException as create_error:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Kubernetes HPA create error: {create_error.reason}"
+            )
+
+    else:
+        try:
+            autoscaling_v2.patch_namespaced_horizontal_pod_autoscaler(
+                name=deployment_name,
+                namespace=namespace,
+                body=hpa_body
+            )
+
+        except ApiException as patch_error:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Kubernetes HPA patch error: {patch_error.reason}"
+            )
+
+    environment.min_replicas = scaling.min_replicas
+    environment.max_replicas = scaling.max_replicas
+    environment.target_cpu = scaling.target_cpu
+
+    db.commit()
+    db.refresh(environment)
+
+    return {
+        "message": "Scaling configuration updated",
+        "application": application.name,
+        "environment": environment.name,
+        "min_replicas": environment.min_replicas,
+        "max_replicas": environment.max_replicas,
+        "target_cpu": environment.target_cpu
+    }
