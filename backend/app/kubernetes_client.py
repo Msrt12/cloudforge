@@ -12,3 +12,4 @@ load_kubernetes_config()
 
 apps_v1 = client.AppsV1Api()
 core_v1 = client.CoreV1Api()
+autoscaling_v2 = client.AutoscalingV2Api()

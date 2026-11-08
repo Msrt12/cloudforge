@@ -69,7 +69,7 @@ resource "google_container_cluster" "cloudforge_cluster" {
   subnetwork = google_compute_subnetwork.cloudforge_subnet.id
 
   networking_mode = "VPC_NATIVE"
-
+  deletion_protection = false
   ip_allocation_policy {
     cluster_secondary_range_name  = local.pods_range_name
     services_secondary_range_name = local.services_range_name
@@ -269,6 +269,13 @@ resource "google_project_iam_member" "cloudforge_sql_client" {
   member  = "serviceAccount:${google_service_account.cloudforge_backend.email}"
 }
 
+resource "google_project_iam_member" "backend_secret_accessor" {
+  project = var.project_id
+
+  role = "roles/secretmanager.secretAccessor"
+
+  member = "serviceAccount:${google_service_account.cloudforge_backend.email}"
+}
 
 resource "google_service_account_iam_member" "cloudforge_workload_identity" {
   service_account_id = google_service_account.cloudforge_backend.name

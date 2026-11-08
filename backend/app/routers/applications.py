@@ -7,7 +7,7 @@ from ..database import get_db
 from kubernetes import client
 from kubernetes.client.exceptions import ApiException
 
-from ..kubernetes_client import apps_v1, core_v1
+from ..kubernetes_client import apps_v1, core_v1, autoscaling_v2
 
 
 router = APIRouter(
@@ -244,10 +244,8 @@ def promote_application(
 
     if promote.target_environment == "staging":
         source_name = "dev"
-
     elif promote.target_environment == "prod":
         source_name = "staging"
-
     else:
         raise HTTPException(
             status_code=400,
@@ -281,23 +279,130 @@ def promote_application(
     if source_environment.current_version is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Nothing is deployed in {source_name.upper()}"
+            detail=f"Nothing is deployed in {source_name}"
         )
 
+    namespace = promote.target_environment
+    deployment_name = application.name
+    version = source_environment.current_version
+    image = f"{application.repository}:{version}"
+
+    labels = {"app": application.name}
+
+    container = client.V1Container(
+        name=application.name,
+        image=image,
+        ports=[
+            client.V1ContainerPort(container_port=8000)
+        ]
+    )
+
+    pod_template = client.V1PodTemplateSpec(
+        metadata=client.V1ObjectMeta(labels=labels),
+        spec=client.V1PodSpec(
+            containers=[container]
+        )
+    )
+
+    deployment_body = client.V1Deployment(
+        metadata=client.V1ObjectMeta(name=deployment_name),
+        spec=client.V1DeploymentSpec(
+            replicas=target_environment.min_replicas,
+            selector=client.V1LabelSelector(
+                match_labels=labels
+            ),
+            template=pod_template
+        )
+    )
+
+    try:
+        existing = apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+        deployment_body.metadata.resource_version = (
+            existing.metadata.resource_version
+        )
+
+        apps_v1.replace_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace,
+            body=deployment_body
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            try:
+                apps_v1.create_namespaced_deployment(
+                    namespace=namespace,
+                    body=deployment_body
+                )
+            except ApiException as create_error:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Kubernetes deployment error: {create_error.reason}"
+                )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Kubernetes deployment error: {error.reason}"
+            )
+
+    service_body = client.V1Service(
+        metadata=client.V1ObjectMeta(name=deployment_name),
+        spec=client.V1ServiceSpec(
+            selector=labels,
+            ports=[
+                client.V1ServicePort(
+                    port=80,
+                    target_port=8000
+                )
+            ]
+        )
+    )
+
+    try:
+        core_v1.read_namespaced_service(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            try:
+                core_v1.create_namespaced_service(
+                    namespace=namespace,
+                    body=service_body
+                )
+            except ApiException as create_error:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Kubernetes service error: {create_error.reason}"
+                )
+        else:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Kubernetes service error: {error.reason}"
+            )
+
     target_environment.previous_version = target_environment.current_version
-    target_environment.current_version = source_environment.current_version
-    target_environment.status = "deployed"
+    target_environment.current_version = version
+    target_environment.status = "deploying"
+
     db.commit()
     db.refresh(target_environment)
 
     return {
-        "message": "Application promoted",
+        "message": "Promotion submitted to Kubernetes",
         "application": application.name,
         "from": source_name,
-        "to": promote.target_environment,
-        "version": target_environment.current_version,
+        "to": namespace,
+        "version": version,
         "status": target_environment.status
     }
+
+
 
 @router.post("/{application_id}/rollback")
 def rollback_application(
@@ -338,93 +443,89 @@ def rollback_application(
             detail="No previous version available for rollback"
         )
 
-    old_current_version = environment.current_version
+    namespace = environment.name
+    deployment_name = application.name
 
-    environment.current_version = environment.previous_version
+    old_current_version = environment.current_version
+    rollback_version = environment.previous_version
+
+    image = f"{application.repository}:{rollback_version}"
+
+    try:
+        deployment = apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Kubernetes Deployment not found"
+            )
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Kubernetes error: {error.reason}"
+        )
+
+    # Змінюємо image у Deployment
+    containers = deployment.spec.template.spec.containers
+
+    container = next(
+        (c for c in containers if c.name == application.name),
+        None
+    )
+
+    if container is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Application container not found in Deployment"
+        )
+
+    container.image = image
+
+    try:
+        apps_v1.patch_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace,
+            body={
+                "spec": {
+                    "template": {
+                        "spec": {
+                            "containers": [
+                                {
+                                    "name": container.name,
+                                    "image": image
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        )
+
+    except ApiException as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Kubernetes rollback error: {error.reason}"
+        )
+
+    environment.current_version = rollback_version
     environment.previous_version = old_current_version
-    environment.status = "deployed"
+    environment.status = "deploying"
 
     db.commit()
     db.refresh(environment)
 
     return {
-        "message": "Rollback completed",
+        "message": "Rollback submitted to Kubernetes",
         "application": application.name,
         "environment": environment.name,
         "version": environment.current_version,
         "previous_version": environment.previous_version,
         "status": environment.status
     }
-
-
-@router.patch("/{application_id}/scaling")
-def update_scaling(
-    application_id: int,
-    scaling: schemas.ScalingRequest,
-    db: Session = Depends(get_db)
-):
-    application = (
-        db.query(models.Application)
-        .filter(models.Application.id == application_id)
-        .first()
-    )
-
-    if application is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Application not found"
-        )
-
-    environment = (
-        db.query(models.Environment)
-        .filter(
-            models.Environment.application_id == application_id,
-            models.Environment.name == scaling.environment
-        )
-        .first()
-    )
-
-    if environment is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Environment not found"
-        )
-
-    if scaling.min_replicas < 1:
-        raise HTTPException(
-            status_code=400,
-            detail="min_replicas must be at least 1"
-        )
-
-    if scaling.max_replicas < scaling.min_replicas:
-        raise HTTPException(
-            status_code=400,
-            detail="max_replicas must be greater than or equal to min_replicas"
-        )
-
-    if scaling.target_cpu < 1 or scaling.target_cpu > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="target_cpu must be between 1 and 100"
-        )
-
-    environment.min_replicas = scaling.min_replicas
-    environment.max_replicas = scaling.max_replicas
-    environment.target_cpu = scaling.target_cpu
-
-    db.commit()
-    db.refresh(environment)
-
-    return {
-        "message": "Scaling configuration updated",
-        "application": application.name,
-        "environment": environment.name,
-        "min_replicas": environment.min_replicas,
-        "max_replicas": environment.max_replicas,
-        "target_cpu": environment.target_cpu
-    }
-
-
 
 
 @router.patch("/{application_id}/scaling")
