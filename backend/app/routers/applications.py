@@ -405,8 +405,7 @@ def promote_application(
             except ApiException as create_error:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Kubernetes deployment error: {
-                        create_error.reason}"
+                    detail=f"Kubernetes deployment error: {create_error.reason}"
                 )
         else:
             raise HTTPException(
