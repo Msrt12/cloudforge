@@ -21,7 +21,7 @@ jobs:
           flake8 --count --max-complexity=10 --max-line-length=120 --statistics backend/app/routers
   building:
     runs-on: ubuntu-latest
-
+    environment: build
     permissions:
       contents: read
       id-token: write
