@@ -58,6 +58,7 @@ jobs:
   helmupgrading:
     runs-on: ubuntu-latest
     environment: production
+    needs: building
     permissions:
       contents: read
       id-token: write
