@@ -1,7 +1,7 @@
 from time import timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
@@ -43,6 +43,8 @@ def create_application(
     db.add(new_application)
     db.flush()
 
+
+
     environments = [
         models.Environment(
             name="dev",
@@ -70,6 +72,9 @@ def create_application(
     db.refresh(new_application)
 
     return new_application
+
+
+
 
 @router.post("/{application_id}/deploy")
 def deploy_application(
@@ -316,12 +321,19 @@ def promote_application(
             detail=f"Nothing is deployed in {source_name}"
         )
 
+
+
+
+
     namespace = promote.target_environment
     deployment_name = application.name
     version = source_environment.current_version
     image = f"{application.repository}:{version}"
 
     labels = {"app": application.name}
+
+
+
 
     container = client.V1Container(
         name=application.name,
