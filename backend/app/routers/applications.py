@@ -43,8 +43,6 @@ def create_application(
     db.add(new_application)
     db.flush()
 
-
-
     environments = [
         models.Environment(
             name="dev",
@@ -72,8 +70,6 @@ def create_application(
     db.refresh(new_application)
 
     return new_application
-
-
 
 
 @router.post("/{application_id}/deploy")
@@ -124,7 +120,6 @@ def deploy_application(
         "app": application.name
     }
 
-    
     container = client.V1Container(
         name=application.name,
         image=image,
@@ -164,7 +159,6 @@ def deploy_application(
             timeout_seconds=2
         )
     )
-
 
     pod_template = client.V1PodTemplateSpec(
         metadata=client.V1ObjectMeta(
@@ -263,6 +257,7 @@ def deploy_application(
         "status": environment.status
     }
 
+
 @router.post("/{application_id}/promote")
 def promote_application(
     application_id: int,
@@ -321,19 +316,12 @@ def promote_application(
             detail=f"Nothing is deployed in {source_name}"
         )
 
-
-
-
-
     namespace = promote.target_environment
     deployment_name = application.name
     version = source_environment.current_version
     image = f"{application.repository}:{version}"
 
     labels = {"app": application.name}
-
-
-
 
     container = client.V1Container(
         name=application.name,
@@ -417,7 +405,8 @@ def promote_application(
             except ApiException as create_error:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Kubernetes deployment error: {create_error.reason}"
+                    detail=f"Kubernetes deployment error: {
+                        create_error.reason}"
                 )
         else:
             raise HTTPException(
@@ -477,7 +466,6 @@ def promote_application(
         "version": version,
         "status": target_environment.status
     }
-
 
 
 @router.post("/{application_id}/rollback")
@@ -861,7 +849,6 @@ def get_application_status(
             )
         )
 
-                
         pod_details.append({
             "name": pod.metadata.name,
             "phase": pod.status.phase,
@@ -926,8 +913,6 @@ def get_application_status(
         },
         "pods": pod_details
     }
-
-
 
 
 def format_k8s_datetime(value):
