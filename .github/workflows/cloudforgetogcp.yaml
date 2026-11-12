@@ -77,9 +77,10 @@ jobs:
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v3
         with:
-          cluster_name: ${{ vars.GKE_CLUSTER_NAME }}
-          location: europe-west3-b
-          project_id: ${{ vars.GCP_PROJECT_ID }}
+              cluster_name: ${{ vars.GKE_CLUSTER_NAME }}
+              location: europe-west3-b
+              project_id: ${{ vars.GCP_PROJECT_ID }}
+              use_auth_provider: true
 
 
       - name: Set up Helm

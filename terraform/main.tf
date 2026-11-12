@@ -342,7 +342,7 @@ resource "google_service_account_iam_member" "githubhelm" {
   service_account_id = google_service_account.githubhelm.name
   role               = "roles/iam.workloadIdentityUser"
 
-  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.environment/${var.environment}"
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.environment/production"
 }
 
 
