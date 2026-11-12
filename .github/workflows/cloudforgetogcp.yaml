@@ -78,7 +78,7 @@ jobs:
         uses: google-github-actions/get-gke-credentials@v3
         with:
               cluster_name: ${{ vars.GKE_CLUSTER_NAME }}
-              location: europe-west3-b
+              location: europe-west3-a
               project_id: ${{ vars.GCP_PROJECT_ID }}
               use_auth_provider: true
 
