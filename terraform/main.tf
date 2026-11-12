@@ -358,3 +358,11 @@ resource "google_project_iam_member" "githubhelm_gke" {
   role    = "roles/container.admin"
   member  = "serviceAccount:${google_service_account.githubhelm.email}"
 }
+
+
+
+resource "google_project_iam_member" "githubhelm_gke_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.githubhelm.email}"
+}
