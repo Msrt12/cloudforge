@@ -96,7 +96,7 @@ jobs:
             --create-namespace \
             --set image.repository=${{ vars.REGISTRY_GCP }}/cloudeforge/cloudforge/cloudforge-backend \
             --set image.tag=${{ github.sha }} \
-            --set gcpServiceAccount=${{ vars.GCP_SERVICE_ACCOUNT_HELM }} \
+            --set gcpServiceAccount=${{ vars.GCP_SERVICE_ACCOUNT_BACKEND }} \
             --set projectId=${{ vars.GCP_PROJECT_ID }} \
             --set cloudSql.instanceConnectionName=${{ vars.CLOUD_SQL_INSTANCE_CONNECTION_NAME }} \
             --set cloudSql.port=${{ vars.CLOUD_SQL_PORT }}
