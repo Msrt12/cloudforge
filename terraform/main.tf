@@ -285,4 +285,76 @@ resource "google_service_account_iam_member" "cloudforge_workload_identity" {
   member = "serviceAccount:${var.project_id}.svc.id.goog[platform/cloudforge-backend]"
 }
 
+resource "google_service_account" "github" {
+  account_id = "githubsa"
+  project    = var.project_id
+}
 
+resource "google_service_account" "githubhelm" {
+  account_id = "githubhelmsa"
+  project    = var.project_id
+}
+
+
+resource "google_iam_workload_identity_pool" "github" {
+  workload_identity_pool_id = "github-pool"
+  project                   = var.project_id
+}
+
+resource "google_iam_workload_identity_pool_provider" "github" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-provider"
+  project                            = var.project_id
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
+    "attribute.environment" = "assertion.environment"
+
+  }
+
+  attribute_condition = "assertion.repository == '${var.user_name_git}/cloudforge'" 
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+resource "google_service_account_iam_member" "github" {
+  service_account_id = google_service_account.github.name
+  role               = "roles/iam.workloadIdentityUser"
+
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.user_name_git}/cloudforge"
+}
+
+resource "google_artifact_registry_repository_iam_member" "github" {
+  project    = var.project_id
+  location   = "europe-west3"
+  repository = "cloudforge"
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${google_service_account.github.email}"
+}
+
+
+
+
+resource "google_service_account_iam_member" "githubhelm" {
+  service_account_id = google_service_account.githubhelm.name
+  role               = "roles/iam.workloadIdentityUser"
+
+  member = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.environment/${var.environment}"
+}
+
+
+resource "google_project_iam_member" "githubhelm" {
+  project = "${var.project_id}"
+  role    = "roles/container.clusterViewer"
+  member  = "serviceAccount:${google_service_account.githubhelm.email}"
+}
+
+
+resource "google_project_iam_member" "githubhelm_gke" {
+  project = var.project_id
+  role    = "roles/container.admin"
+  member  = "serviceAccount:${google_service_account.githubhelm.email}"
+}

@@ -1,6 +1,6 @@
 image:
   repository: europe-west3-docker.pkg.dev/cloudeforge/cloudforge/cloudforge-backend
-  tag: v8
+  tag: v15
   pullPolicy: IfNotPresent
 
 replicaCount: 1

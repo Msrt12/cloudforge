@@ -104,3 +104,14 @@ variable "db_user" {
   description = "Database user for CloudForge"
   type        = string
 }
+
+
+variable "user_name_git" {
+  description = "Username for Git Hub User"
+  type        = string
+}
+
+variable "environmentgit" {
+  description = "GitHub environment"
+  type        = string
+}

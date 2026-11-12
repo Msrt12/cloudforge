@@ -1,5 +1,7 @@
+from time import timezone
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from .. import models, schemas
 from ..database import get_db
@@ -117,6 +119,7 @@ def deploy_application(
         "app": application.name
     }
 
+    
     container = client.V1Container(
         name=application.name,
         image=image,
@@ -124,8 +127,39 @@ def deploy_application(
             client.V1ContainerPort(
                 container_port=8000
             )
-        ]
+        ],
+
+        startup_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=5,
+            failure_threshold=12,
+            timeout_seconds=2
+        ),
+
+        readiness_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=5,
+            failure_threshold=3,
+            timeout_seconds=2
+        ),
+
+        liveness_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=10,
+            failure_threshold=3,
+            timeout_seconds=2
+        )
     )
+
 
     pod_template = client.V1PodTemplateSpec(
         metadata=client.V1ObjectMeta(
@@ -294,7 +328,37 @@ def promote_application(
         image=image,
         ports=[
             client.V1ContainerPort(container_port=8000)
-        ]
+        ],
+
+        startup_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=5,
+            failure_threshold=12,
+            timeout_seconds=2
+        ),
+
+        readiness_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=5,
+            failure_threshold=3,
+            timeout_seconds=2
+        ),
+
+        liveness_probe=client.V1Probe(
+            http_get=client.V1HTTPGetAction(
+                path="/health",
+                port=8000
+            ),
+            period_seconds=10,
+            failure_threshold=3,
+            timeout_seconds=2
+        )
     )
 
     pod_template = client.V1PodTemplateSpec(
@@ -686,4 +750,321 @@ def update_scaling(
         "min_replicas": environment.min_replicas,
         "max_replicas": environment.max_replicas,
         "target_cpu": environment.target_cpu
+    }
+
+
+@router.get("/{application_id}/status")
+def get_application_status(
+    application_id: int,
+    environment: str,
+    db: Session = Depends(get_db)
+):
+    application = (
+        db.query(models.Application)
+        .filter(models.Application.id == application_id)
+        .first()
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found"
+        )
+
+    env = (
+        db.query(models.Environment)
+        .filter(
+            models.Environment.application_id == application.id,
+            models.Environment.name == environment
+        )
+        .first()
+    )
+
+    if env is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Environment not found"
+        )
+
+    namespace = environment
+    deployment_name = application.name
+
+    try:
+        deployment = apps_v1.read_namespaced_deployment(
+            name=deployment_name,
+            namespace=namespace
+        )
+
+        pods = core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"app={deployment_name}"
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Deployment not found in Kubernetes"
+            )
+
+        if error.status == 403:
+            raise HTTPException(
+                status_code=502,
+                detail="CloudForge lacks Kubernetes read permissions"
+            )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to communicate with Kubernetes API"
+        )
+
+    desired_replicas = deployment.spec.replicas or 0
+    ready_replicas = deployment.status.ready_replicas or 0
+    available_replicas = deployment.status.available_replicas or 0
+    updated_replicas = deployment.status.updated_replicas or 0
+
+    pod_details = []
+
+    for pod in pods.items:
+        container_statuses = (
+            pod.status.container_statuses or []
+        )
+
+        restarts = sum(
+            container.restart_count or 0
+            for container in container_statuses
+        )
+
+        pod_ready = any(
+            condition.type == "Ready"
+            and condition.status == "True"
+            for condition in (pod.status.conditions or [])
+        )
+
+        containers_ready = (
+            len(container_statuses) > 0
+            and all(
+                container.ready
+                for container in container_statuses
+            )
+        )
+
+                
+        pod_details.append({
+            "name": pod.metadata.name,
+            "phase": pod.status.phase,
+            "ready": pod_ready and containers_ready,
+            "restarts": restarts,
+            "containers": [
+                {
+                    "name": container.name,
+                    "ready": container.ready,
+                    "restart_count": container.restart_count
+                }
+                for container in container_statuses
+            ],
+            "probes": [
+                {
+                    "container": container.name,
+                    "startup": {
+                        "path": container.startup_probe.http_get.path,
+                        "port": container.startup_probe.http_get.port
+                    } if container.startup_probe and container.startup_probe.http_get else None,
+                    "readiness": {
+                        "path": container.readiness_probe.http_get.path,
+                        "port": container.readiness_probe.http_get.port
+                    } if container.readiness_probe and container.readiness_probe.http_get else None,
+                    "liveness": {
+                        "path": container.liveness_probe.http_get.path,
+                        "port": container.liveness_probe.http_get.port
+                    } if container.liveness_probe and container.liveness_probe.http_get else None
+                }
+                for container in pod.spec.containers
+            ]
+        })
+
+    if desired_replicas == 0:
+        status = "scaled_down"
+
+    elif (
+        ready_replicas == desired_replicas
+        and available_replicas == desired_replicas
+        and updated_replicas == desired_replicas
+    ):
+        status = "healthy"
+
+    elif ready_replicas > 0:
+        status = "degraded"
+
+    else:
+        status = "unhealthy"
+
+    return {
+        "application_id": application.id,
+        "application": application.name,
+        "environment": environment,
+        "current_version": env.current_version,
+        "previous_version": env.previous_version,
+        "status": status,
+        "deployment": {
+            "desired_replicas": desired_replicas,
+            "ready_replicas": ready_replicas,
+            "available_replicas": available_replicas,
+            "updated_replicas": updated_replicas
+        },
+        "pods": pod_details
+    }
+
+
+
+
+def format_k8s_datetime(value):
+    if value is None:
+        return None
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.isoformat()
+
+
+@router.get("/{application_id}/events")
+def get_application_events(
+    application_id: int,
+    environment: str,
+    db: Session = Depends(get_db)
+):
+    application = (
+        db.query(models.Application)
+        .filter(models.Application.id == application_id)
+        .first()
+    )
+
+    if application is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found"
+        )
+
+    env = (
+        db.query(models.Environment)
+        .filter(
+            models.Environment.application_id == application.id,
+            models.Environment.name == environment
+        )
+        .first()
+    )
+
+    if env is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Environment not found"
+        )
+
+    namespace = env.name
+
+    try:
+        deployment = apps_v1.read_namespaced_deployment(
+            name=application.name,
+            namespace=namespace
+        )
+
+        pods = core_v1.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"app={application.name}"
+        )
+
+        events_response = core_v1.list_namespaced_event(
+            namespace=namespace
+        )
+
+    except ApiException as error:
+        if error.status == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Deployment or namespace not found"
+            )
+
+        if error.status == 403:
+            raise HTTPException(
+                status_code=502,
+                detail="CloudForge lacks Kubernetes read permissions"
+            )
+
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to communicate with Kubernetes API"
+        )
+
+    pod_uids = {
+        pod.metadata.uid
+        for pod in pods.items
+        if pod.metadata and pod.metadata.uid
+    }
+
+    pod_names = {
+        pod.metadata.name
+        for pod in pods.items
+        if pod.metadata and pod.metadata.name
+    }
+
+    deployment_uid = deployment.metadata.uid
+
+    application_events = []
+
+    for event in events_response.items:
+        involved = event.involved_object
+
+        if involved is None:
+            continue
+
+        belongs_to_application = (
+            (
+                involved.kind == "Pod"
+                and involved.uid in pod_uids
+            )
+            or (
+                involved.kind == "Pod"
+                and not involved.uid
+                and involved.name in pod_names
+            )
+            or (
+                involved.kind == "Deployment"
+                and involved.uid == deployment_uid
+            )
+        )
+
+        if not belongs_to_application:
+            continue
+
+        event_time = (
+            event.last_timestamp
+            or event.event_time
+            or event.first_timestamp
+            or event.metadata.creation_timestamp
+        )
+
+        application_events.append({
+            "type": event.type,
+            "reason": event.reason,
+            "message": event.message,
+            "object": {
+                "kind": involved.kind,
+                "name": involved.name
+            },
+            "count": event.count or 1,
+            "timestamp": format_k8s_datetime(event_time)
+        })
+
+    application_events.sort(
+        key=lambda event: event["timestamp"] or "",
+        reverse=True
+    )
+
+    return {
+        "application_id": application.id,
+        "application": application.name,
+        "environment": namespace,
+        "total_events": len(application_events),
+        "events": application_events
     }

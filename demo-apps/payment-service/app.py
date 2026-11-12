@@ -2,6 +2,10 @@ from fastapi import FastAPI
 
 app = FastAPI()
 
+a=[]
+
+for i in range(1, 1000000):
+    a.append(i)
 
 @app.get("/")
 def root():

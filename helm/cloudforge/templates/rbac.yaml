@@ -32,6 +32,22 @@ rules:
       - delete
 
   - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - get
+      - list
+
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+
+  - apiGroups:
       - autoscaling
     resources:
       - horizontalpodautoscalers
