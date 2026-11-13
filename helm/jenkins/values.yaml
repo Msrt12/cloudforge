@@ -1,7 +1,6 @@
 controller:
   image: "jenkins/jenkins"
   tag: "2.479.1-lts-jdk17"
-  imagePullPolicy: "IfNotPresent"
 
   serviceType: ClusterIP
 
