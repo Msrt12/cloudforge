@@ -1,6 +1,8 @@
 controller:
-  image: "jenkins/jenkins"
-  tag: "2.479.1-lts-jdk17"
+  image:
+    registry: "docker.io"
+    repository: "jenkins/jenkins"
+    tag: "2.479.1-lts-jdk17"
 
   serviceType: ClusterIP
 
