@@ -1,4 +1,9 @@
 controller:
+  image:
+    registry: "docker.io"
+    repository: "jenkins/jenkins"
+    tag: "2.580.2-jdk21"
+
   numExecutors: 0
   serviceType: ClusterIP
 
