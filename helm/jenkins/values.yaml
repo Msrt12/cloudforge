@@ -55,7 +55,7 @@ controller:
                         stages {
                           stage('Checkout') {
                             steps {
-                              git url: params.REPOSITORY_URL
+                                git branch: 'main', url: params.REPOSITORY_URL
                             }
                           }
                         }
