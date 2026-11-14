@@ -3,7 +3,46 @@ controller:
     registry: "docker.io"
     repository: "jenkins/jenkins"
     tag: "2.580.2-jdk21"
+  additionalPlugins:
+    - job-dsl
+  JCasC:
+    defaultConfig: true
+    configScripts:
+      cloudforge-jobs: |
+        jobs:
+          - script: |
+              pipelineJob('cloudforge-build') {
+                description('CI pipeline for CloudForge applications')
 
+                parameters {
+                  stringParam('APPLICATION_ID', '', 'CloudForge application ID')
+                  stringParam('REPOSITORY_URL', '', 'Git repository URL')
+                }
+
+                definition {
+                  cps {
+                    script('''
+                      pipeline {
+                        agent {
+                          kubernetes {
+                            cloud 'kubernetes'
+                            inheritFrom 'default'
+                          }
+                        }
+
+                        stages {
+                          stage('Checkout') {
+                            steps {
+                              git url: params.REPOSITORY_URL
+                            }
+                          }
+                        }
+                      }
+                    '''.stripIndent())
+                    sandbox()
+                  }
+                }
+              }
   numExecutors: 0
   serviceType: ClusterIP
 

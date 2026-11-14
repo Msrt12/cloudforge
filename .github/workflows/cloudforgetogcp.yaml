@@ -142,3 +142,6 @@ jobs:
             --namespace jenkins \
             --values helm/jenkins/values.yaml \
             --version 5.10.12 \
+            --wait \
+            --timeout 15m \
+            --atomic
