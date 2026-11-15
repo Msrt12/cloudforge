@@ -1,6 +1,6 @@
 
 # CloudForge
-
+![alt text](image.png)
 **Self-Service Kubernetes Deployment Platform | GCP · GKE · Terraform · FastAPI · Jenkins**
 
 CloudForge is a Kubernetes-based internal developer platform for managing containerized application deployments across development, staging, and production environments.
