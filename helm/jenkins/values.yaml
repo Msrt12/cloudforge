@@ -76,7 +76,7 @@ controller:
                                           --local context=. \
                                           --local dockerfile=. \
                                           --output type=oci,dest=/tmp/cloudforge-image.tar
-                                    '''
+                                      '''
                                 }
                             }
                           }
