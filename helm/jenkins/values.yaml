@@ -1,4 +1,11 @@
 controller:
+  startupProbe:
+    httpGet:
+      path: /login
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 60
   image:
     registry: "docker.io"
     repository: "jenkins/jenkins"
