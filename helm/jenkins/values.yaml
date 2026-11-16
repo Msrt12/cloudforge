@@ -1,3 +1,4 @@
+
 controller:
   startupProbe:
     httpGet:
@@ -6,12 +7,15 @@ controller:
     periodSeconds: 10
     timeoutSeconds: 10
     failureThreshold: 60
+
   image:
     registry: "docker.io"
     repository: "jenkins/jenkins"
     tag: "2.580.2-jdk21"
+
   additionalPlugins:
     - job-dsl
+
   JCasC:
     defaultConfig: true
     configScripts:
@@ -31,60 +35,63 @@ controller:
                     script('''
                       pipeline {
                         agent {
-                            kubernetes {
-                                cloud 'kubernetes'
-                                inheritFrom 'default'
-                                yaml '''
-                        apiVersion: v1
-                        kind: Pod
-                        spec:
-                          containers:
-                            - name: buildkit
-                              image: moby/buildkit:rootless
-                              command:
-                                - sleep
-                              args:
-                                - "99d"
-                              tty: true
-                              env:
-                                - name: BUILDKITD_FLAGS
-                                  value: "--oci-worker-no-process-sandbox"
-                              securityContext:
-                                runAsUser: 1000
-                                runAsGroup: 1000
-                                seccompProfile:
-                                  type: Unconfined
-                                appArmorProfile:
-                                  type: Unconfined
-                        '''
-                            }
+                          kubernetes {
+                            cloud 'kubernetes'
+                            inheritFrom 'default'
+                            yaml """
+        apiVersion: v1
+        kind: Pod
+        spec:
+          containers:
+            - name: buildkit
+              image: moby/buildkit:rootless
+              command:
+                - sleep
+              args:
+                - "99d"
+              tty: true
+              env:
+                - name: BUILDKITD_FLAGS
+                  value: "--oci-worker-no-process-sandbox"
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                seccompProfile:
+                  type: Unconfined
+                appArmorProfile:
+                  type: Unconfined
+        """
+                          }
                         }
+
                         stages {
                           stage('Checkout') {
                             steps {
-                                git branch: 'main', url: params.REPOSITORY_URL
+                              git branch: 'main', url: params.REPOSITORY_URL
                             }
                           }
-                        }
+
                           stage('Validate Dockerfile') {
                             steps {
-                                script {
-                                    if (!fileExists('Dockerfile')) {
-                                        error('Dockerfile not found in repository root!')
-                                    }
+                              script {
+                                if (!fileExists('Dockerfile')) {
+                                  error('Dockerfile not found in repository root!')
                                 }
+                              }
                             }
+                          }
+
                           stage('Build Image') {
                             steps {
-                                container('buildkit') {
-                                    sh '''
-                                        buildctl-daemonless.sh build \
-                                          --frontend dockerfile.v0 \
-                                          --local context=. \
-                                          --local dockerfile=. \
-                                          --output type=oci,dest=/tmp/cloudforge-image.tar
-                                      '''
-                                }
+                              container('buildkit') {
+                                sh """
+                                  buildctl-daemonless.sh build \\
+                                    --frontend dockerfile.v0 \\
+                                    --local context=. \\
+                                    --local dockerfile=. \\
+                                    --output type=oci,dest=/tmp/cloudforge-image.tar
+                                """
+                              }
                             }
                           }
                         }
@@ -94,6 +101,7 @@ controller:
                   }
                 }
               }
+
   numExecutors: 0
   serviceType: ClusterIP
 
