@@ -21,7 +21,6 @@ router = APIRouter(
 )
 
 
-
 @router.post("/", response_model=schemas.ApplicationResponse)
 def create_application(
     application: schemas.ApplicationCreate,
@@ -74,6 +73,7 @@ def create_application(
     db.refresh(new_application)
 
     return new_application
+
 
 @router.post("/{application_id}/build", status_code=202)
 def build_application(
