@@ -34,6 +34,7 @@ controller:
                               apiVersion: v1
                               kind: Pod
                               spec:
+                                serviceAccountName: jenkins-agent
                                 containers:
                                   - name: buildkit
                                     image: moby/buildkit:rootless
@@ -64,7 +65,17 @@ controller:
                                       runAsGroup: 1000
                                     env:
                                       - name: TRIVY_CACHE_DIR
-                                        value: /tmp/trivy-cache      
+                                        value: /tmp/trivy-cache  
+                                  - name: skopeo
+                                    image: quay.io/skopeo/stable:latest
+                                    command:
+                                      - sleep
+                                    args:
+                                      - "99d"
+                                    tty: true
+                                    securityContext:
+                                      runAsUser: 1000
+                                      runAsGroup: 1000    
                             """.stripIndent()
                           }
                         }
@@ -130,6 +141,13 @@ persistence:
 
 rbac:
   create: true
+
+serviceAccountAgent:
+  create: true
+  name: jenkins-agent
+  annotations:
+    iam.gke.io/gcp-service-account: cloudforge-jenkins-agent@cloudeforge.iam.gserviceaccount.com
+
 
 serviceAccount:
   create: true

@@ -366,3 +366,24 @@ resource "google_project_iam_member" "githubhelm_gke_secret_accessor" {
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${google_service_account.githubhelm.email}"
 }
+
+
+resource "google_service_account" "jenkins_agent" {
+  account_id   = "cloudforge-jenkins-agent"
+  display_name = "CloudForge Jenkins Agent"
+}
+
+
+
+resource "google_project_iam_member" "jenkins_agent_registry_writer" {
+  project = var.project_id
+  role = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.jenkins_agent.email}"
+}
+
+
+resource "google_service_account_iam_member" "jenkins_agent_wi" {
+  service_account_id = google_service_account.jenkins_agent.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[jenkins/jenkins-agent]"
+}
