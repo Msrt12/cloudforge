@@ -1,6 +1,6 @@
 from time import timezone
 
-
+from app import models
 from app.jenkins_client import trigger_build
 from requests.exceptions import RequestException
 from fastapi import APIRouter, Depends, HTTPException
@@ -80,8 +80,8 @@ def build_application(
     application_id: int,
     db: Session = Depends(get_db)
 ):
-    application = db.query(Application).filter(
-        Application.id == application_id
+    application = db.query(models.Application).filter(
+        models.Application.id == application_id
     ).first()
 
     if not application:
