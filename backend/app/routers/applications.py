@@ -1,5 +1,8 @@
 from time import timezone
 
+
+from app.jenkins_client import trigger_build
+from requests.exceptions import RequestException
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -16,6 +19,7 @@ router = APIRouter(
     prefix="/applications",
     tags=["Applications"]
 )
+
 
 
 @router.post("/", response_model=schemas.ApplicationResponse)
@@ -70,6 +74,38 @@ def create_application(
     db.refresh(new_application)
 
     return new_application
+
+@router.post("/{application_id}/build", status_code=202)
+def build_application(
+    application_id: int,
+    db: Session = Depends(get_db)
+):
+    application = db.query(Application).filter(
+        Application.id == application_id
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found"
+        )
+
+    try:
+        queue_url = trigger_build(
+            application_id=application.id,
+            repository_url=application.repository
+        )
+    except RequestException:
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to trigger Jenkins build"
+        )
+
+    return {
+        "application_id": application.id,
+        "status": "queued",
+        "queue_url": queue_url
+    }
 
 
 @router.post("/{application_id}/deploy")

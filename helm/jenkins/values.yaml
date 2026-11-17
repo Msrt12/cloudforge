@@ -75,7 +75,20 @@ controller:
                                     tty: true
                                     securityContext:
                                       runAsUser: 1000
-                                      runAsGroup: 1000    
+                                      runAsGroup: 1000
+                                  - name: gcloud
+                                    image: google/cloud-sdk:slim
+                                    command:
+                                      - sleep
+                                    args:
+                                      - "99d"
+                                    tty: true
+                                    securityContext:
+                                      runAsUser: 1000
+                                      runAsGroup: 1000
+                                    env:
+                                      - name: CLOUDSDK_CONFIG
+                                        value: /tmp/gcloud-config  
                             """.stripIndent()
                           }
                         }
@@ -83,7 +96,11 @@ controller:
                         options {
                           skipDefaultCheckout()
                         }
-
+                        environment {
+                        REGISTRY = 'europe-west3-docker.pkg.dev'
+                        PROJECT_ID = 'cloudeforge'
+                        REGISTRY_REPOSITORY = 'cloudforge/cloudforge-backend'
+                        }
                         stages {
                           stage('Checkout') {
                             steps {
@@ -115,6 +132,24 @@ controller:
                                 }
                             }
                         }
+                        stage('Push to Artifact Registry') {
+                          steps {
+                              container('gcloud') {
+                                  sh 'set +x; umask 077; gcloud auth print-access-token > .gcp-token'
+                              }
+
+                              container('skopeo') {
+                                  sh 'set +x; skopeo login --authfile .registry-auth.json --username oauth2accesstoken --password-stdin $REGISTRY < .gcp-token'
+
+                                  sh 'skopeo copy --authfile .registry-auth.json docker-archive:cloudforge-image.tar docker://$REGISTRY/$PROJECT_ID/$REGISTRY_REPOSITORY/app-$APPLICATION_ID:$BUILD_NUMBER'
+                              }
+                          }
+                          post {
+                              always {
+                                  sh 'rm -f .gcp-token .registry-auth.json'
+                              }
+                          }
+                      }
                         }
                       }
                     '''.stripIndent())

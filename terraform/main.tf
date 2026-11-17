@@ -387,3 +387,18 @@ resource "google_service_account_iam_member" "jenkins_agent_wi" {
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[jenkins/jenkins-agent]"
 }
+
+
+resource "google_secret_manager_secret" "jenkins_api_token" {
+  secret_id = "jenkins-api-token"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "backend_jenkins_token" {
+  secret_id = google_secret_manager_secret.jenkins_api_token.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:cloudforge-dev-backend-sa@cloudeforge.iam.gserviceaccount.com"
+}
