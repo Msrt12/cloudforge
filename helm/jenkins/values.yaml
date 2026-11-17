@@ -1,4 +1,12 @@
 controller:
+  startupProbe:
+          httpGet:
+            path: /health/startup  # Ендпоінт ініціалізації (або використайте /health)
+            port: 8080
+          initialDelaySeconds: 10  # Пауза перед першою перевіркою після старту контейнера
+          periodSeconds: 10        # Інтервал між перевірками (кожні 10 сек)
+          failureThreshold: 24     # Макс. кількість спроб: 24 * 10с = 240 сек (4 хвилини)
+          timeoutSeconds: 3        # Таймаут очікування відповіді
   image:
     registry: "docker.io"
     repository: "jenkins/jenkins"
