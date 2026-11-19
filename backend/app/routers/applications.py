@@ -15,7 +15,6 @@ from kubernetes import client
 from kubernetes.client.exceptions import ApiException
 from ..kubernetes_client import apps_v1, core_v1, autoscaling_v2
 
-
 router = APIRouter(
     prefix="/applications",
     tags=["Applications"]

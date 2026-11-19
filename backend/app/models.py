@@ -1,7 +1,6 @@
-from click import DateTime
 from sqlalchemy import Column, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
-
+from sqlalchemy import DateTime
 from .database import Base
 
 
