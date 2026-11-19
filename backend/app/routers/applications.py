@@ -168,19 +168,16 @@ def build_callback(
     build.image_uri = payload.image_uri
     build.finished_at = datetime.now(timezone.utc)
 
-
-
-
     db.commit()
     db.refresh(build)
-    
+
     if build.status == "SUCCESS" and build.image_uri:
         deploy_to_dev(
             application_id=build.application_id,
             image_uri=build.image_uri,
             version=str(build.jenkins_build_number),
             db=db
-            )
+        )
     return {
         "build_id": build.id,
         "status": build.status
@@ -220,7 +217,6 @@ def deploy_to_dev(
             status_code=404,
             detail="Environment not found"
         )
-
 
     namespace = "dev"
     deployment_name = application.name
