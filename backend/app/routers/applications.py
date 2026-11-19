@@ -168,21 +168,32 @@ def build_callback(
     build.image_uri = payload.image_uri
     build.finished_at = datetime.now(timezone.utc)
 
+
+
+
     db.commit()
     db.refresh(build)
-
+    
+    if build.status == "SUCCESS" and build.image_uri:
+        deploy_to_dev(
+            application_id=build.application_id,
+            image_uri=build.image_uri,
+            version=str(build.jenkins_build_number),
+            db=db
+            )
     return {
         "build_id": build.id,
         "status": build.status
     }
 
 
-@router.post("/{application_id}/deploy")
-def deploy_application(
+def deploy_to_dev(
     application_id: int,
-    deploy: schemas.DeployRequest,
-    db: Session = Depends(get_db)
+    image_uri: str,
+    version: str,
+    db: Session
 ):
+    image = image_uri
     application = (
         db.query(models.Application)
         .filter(models.Application.id == application_id)
@@ -199,7 +210,7 @@ def deploy_application(
         db.query(models.Environment)
         .filter(
             models.Environment.application_id == application_id,
-            models.Environment.name == deploy.environment
+            models.Environment.name == "dev"
         )
         .first()
     )
@@ -210,16 +221,9 @@ def deploy_application(
             detail="Environment not found"
         )
 
-    if deploy.environment != "dev":
-        raise HTTPException(
-            status_code=400,
-            detail="Direct deployment is currently allowed only to dev"
-        )
 
     namespace = "dev"
     deployment_name = application.name
-
-    image = f"{application.repository}:{deploy.version}"
 
     labels = {
         "app": application.name
@@ -347,8 +351,8 @@ def deploy_application(
             )
 
     environment.previous_version = environment.current_version
-    environment.current_version = deploy.version
-    environment.status = "deployed"
+    environment.current_version = version
+    environment.status = "deploying"
 
     db.commit()
     db.refresh(environment)
