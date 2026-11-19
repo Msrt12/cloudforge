@@ -1,4 +1,5 @@
-from sqlalchemy import Column, ForeignKey, Integer, String
+from click import DateTime
+from sqlalchemy import Column, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -8,7 +9,7 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
-
+    builds = relationship("Build", back_populates="application")
     name = Column(
         String,
         unique=True,
@@ -53,7 +54,6 @@ class Environment(Base):
         nullable=True
     )
 
-
     status = Column(
         String,
         default="Not deployed"
@@ -69,21 +69,48 @@ class Environment(Base):
         back_populates="environments"
     )
 
-
     min_replicas = Column(
-    Integer,
-    nullable=False,
-    default=1
+        Integer,
+        nullable=False,
+        default=1
     )
 
     max_replicas = Column(
-    Integer,
-    nullable=False,
-    default=3
-    )   
+        Integer,
+        nullable=False,
+        default=3
+    )
 
     target_cpu = Column(
-    Integer,
-    nullable=False,
-    default=60
+        Integer,
+        nullable=False,
+        default=60
     )
+
+
+class Build(Base):
+    __tablename__ = "builds"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    application_id = Column(
+        Integer,
+        ForeignKey("applications.id"),
+        nullable=False
+    )
+
+    jenkins_queue_id = Column(Integer, nullable=True)
+    jenkins_build_number = Column(Integer, nullable=True)
+
+    status = Column(String, default="QUEUED", nullable=False)
+
+    image_uri = Column(String, nullable=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    application = relationship("Application", back_populates="builds")

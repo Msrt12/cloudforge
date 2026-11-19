@@ -1,6 +1,14 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 
+from typing import Literal
+
+
+class BuildCallback(BaseModel):
+    jenkins_build_number: int
+    status: Literal["SUCCESS", "FAILURE", "ABORTED", "UNSTABLE"]
+    image_uri: Optional[str] = None
+
 
 class EnvironmentResponse(BaseModel):
     id: int
@@ -27,9 +35,11 @@ class ApplicationResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class DeployRequest(BaseModel):
     environment: str
     version: str
+
 
 class PromoteRequest(BaseModel):
     target_environment: str

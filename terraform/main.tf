@@ -402,3 +402,19 @@ resource "google_secret_manager_secret_iam_member" "backend_jenkins_token" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:cloudforge-dev-backend-sa@cloudeforge.iam.gserviceaccount.com"
 }
+
+
+resource "google_secret_manager_secret" "callback_token" {
+  secret_id = "cloudforge-callback-token"
+
+  replication {
+    auto {}
+  }
+}
+
+
+resource "google_secret_manager_secret_iam_member" "backend_callback_token" {
+  secret_id = google_secret_manager_secret.callback_token.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:cloudforge-dev-backend-sa@cloudeforge.iam.gserviceaccount.com"
+}

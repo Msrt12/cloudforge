@@ -14,15 +14,18 @@ JENKINS_API_TOKEN = Path(
 ).read_text().strip()
 
 
-
-def trigger_build(application_id: int, repository_url: str):
-
+def trigger_build(
+    application_id: int,
+    repository_url: str,
+    build_id: int
+):
     response = requests.post(
         f"{JENKINS_URL}/job/cloudforge-build/buildWithParameters",
         auth=(JENKINS_USERNAME, JENKINS_API_TOKEN),
         data={
             "APPLICATION_ID": application_id,
-            "REPOSITORY_URL": repository_url
+            "REPOSITORY_URL": repository_url,
+            "CLOUDFORGE_BUILD_ID": build_id
         },
         timeout=15
     )

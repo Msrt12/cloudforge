@@ -1,14 +1,17 @@
 from time import timezone
-
+import secrets
+from pathlib import Path
+from fastapi import Header
 from app.models import Application
 from app.jenkins_client import trigger_build
 from requests.exceptions import RequestException
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.models import Build
+from urllib.parse import urlparse
 from .. import models, schemas
 from ..database import get_db
-
+from datetime import datetime, timezone
 from kubernetes import client
 from kubernetes.client.exceptions import ApiException
 
@@ -90,21 +93,90 @@ def build_application(
             detail="Application not found"
         )
 
+    build = Build(
+        application_id=application.id,
+        status="PENDING"
+    )
+
+    db.add(build)
+    db.commit()
+    db.refresh(build)
+
     try:
         queue_url = trigger_build(
             application_id=application.id,
-            repository_url=application.repository
+            repository_url=application.repository,
+            build_id=build.id
         )
     except RequestException:
+        build.status = "TRIGGER_UNKNOWN"
+        db.commit()
+
         raise HTTPException(
             status_code=502,
-            detail="Failed to trigger Jenkins build"
+            detail="Failed to confirm Jenkins build request"
         )
 
+    queue_id = int(
+        urlparse(queue_url).path.rstrip("/").split("/")[-1]
+    ) if queue_url else None
+
+    build.jenkins_queue_id = queue_id
+
+    if build.status == "PENDING":
+        build.status = "QUEUED"
+
+    db.commit()
+    db.refresh(build)
+
     return {
+        "build_id": build.id,
         "application_id": application.id,
-        "status": "queued",
-        "queue_url": queue_url
+        "status": build.status,
+        "jenkins_queue_id": build.jenkins_queue_id
+    }
+
+
+@router.post("/builds/{build_id}/callback")
+def build_callback(
+    build_id: int,
+    payload: schemas.BuildCallback,
+    db: Session = Depends(get_db),
+    x_callback_token: str = Header(default="")
+):
+    callback_token = Path(
+        "/var/secrets/callback-token"
+    ).read_text().strip()
+
+    if not secrets.compare_digest(
+        x_callback_token, callback_token
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid callback token"
+        )
+
+    build = db.query(Build).filter(
+        Build.id == build_id
+    ).first()
+
+    if not build:
+        raise HTTPException(
+            status_code=404,
+            detail="Build not found"
+        )
+
+    build.status = payload.status
+    build.jenkins_build_number = payload.jenkins_build_number
+    build.image_uri = payload.image_uri
+    build.finished_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(build)
+
+    return {
+        "build_id": build.id,
+        "status": build.status
     }
 
 
