@@ -1,4 +1,3 @@
-from time import timezone
 import secrets
 from pathlib import Path
 from fastapi import Header
@@ -14,7 +13,6 @@ from ..database import get_db
 from datetime import datetime, timezone
 from kubernetes import client
 from kubernetes.client.exceptions import ApiException
-
 from ..kubernetes_client import apps_v1, core_v1, autoscaling_v2
 
 
