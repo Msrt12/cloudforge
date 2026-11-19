@@ -101,7 +101,7 @@ controller:
                         REGISTRY = 'europe-west3-docker.pkg.dev'
                         PROJECT_ID = 'cloudeforge'
                         REGISTRY_REPOSITORY = 'cloudforge/cloudforge-backend'                        
-                        CLOUDFORGE_URL = 'http://cloudforge-backend.platform.svc.cluster.local:80'
+                        CLOUDFORGE_URL = 'http://cloudforge.platform.svc.cluster.local:80'
                         }
                         stages {
                           stage('Checkout') {
@@ -154,6 +154,8 @@ controller:
                                   sh 'rm -f .gcp-token .registry-auth.json'
                               }
                           }
+                        }
+                      }
                           post {
                             always {
                                 script {
@@ -178,8 +180,6 @@ controller:
                                     }
                                 }
                             }
-                        }
-                      }
                         }
                       }
                     '''.stripIndent())
