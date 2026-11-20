@@ -2,7 +2,7 @@ FROM busybox:musl
 
 WORKDIR /www
 RUN echo '{"status":"healthy"}' > /www/health && \
-    echo 'CloudForge Application - Version 1' > /www/index.html
+    echo 'CloudForge Application - Version 2' > /www/index.html
 
 COPY . /www
 
