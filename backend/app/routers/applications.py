@@ -226,23 +226,23 @@ def deploy_to_dev(
     }
 
     container = client.V1Container(
-    name=application.name,
-    image=image,
-    ports=[
-        client.V1ContainerPort(
-            container_port=8000
-        )
-    ],
-    resources=client.V1ResourceRequirements(
-        requests={
-            "cpu": "100m",
-            "memory": "64Mi"
-        },
-        limits={
-            "cpu": "500m",
-            "memory": "256Mi"
-        }
-    ),
+        name=application.name,
+        image=image,
+        ports=[
+            client.V1ContainerPort(
+                container_port=8000
+            )
+        ],
+        resources=client.V1ResourceRequirements(
+            requests={
+                "cpu": "100m",
+                "memory": "64Mi"
+            },
+            limits={
+                "cpu": "500m",
+                "memory": "256Mi"
+            }
+        ),
 
         startup_probe=client.V1Probe(
             http_get=client.V1HTTPGetAction(
@@ -652,7 +652,7 @@ def rollback_application(
         )
 
     image = build.image_uri
-    
+
     try:
         deployment = apps_v1.read_namespaced_deployment(
             name=deployment_name,
