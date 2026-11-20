@@ -134,6 +134,40 @@ def build_application(
     }
 
 
+
+@router.get("/{application_id}/builds")
+def get_application_builds(
+    application_id: int,
+    db: Session = Depends(get_db)
+):
+    application = db.query(models.Application).filter(
+        models.Application.id == application_id
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found"
+        )
+
+    builds = db.query(models.Build).filter(
+        models.Build.application_id == application_id
+    ).order_by(
+        models.Build.id.desc()
+    ).all()
+
+    return [
+        {
+            "build_id": build.id,
+            "application_id": build.application_id,
+            "jenkins_build_number": build.jenkins_build_number,
+            "status": build.status,
+            "image_uri": build.image_uri
+        }
+        for build in builds
+    ]
+
+
 @router.post("/builds/{build_id}/callback")
 def build_callback(
     build_id: int,
