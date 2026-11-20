@@ -134,7 +134,6 @@ def build_application(
     }
 
 
-
 @router.get("/{application_id}/builds")
 def get_application_builds(
     application_id: int,
