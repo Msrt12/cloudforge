@@ -1,10 +1,11 @@
-FROM alpine:3.23
+FROM busybox:musl
 
-RUN apk add --no-cache busybox-extras && \
-    mkdir -p /www && \
-    echo '{"status":"healthy"}' > /www/health && \
+WORKDIR /www
+RUN echo '{"status":"healthy"}' > /www/health && \
     echo 'CloudForge Application - Version 1' > /www/index.html
+
+COPY . /www
 
 EXPOSE 8000
 
-CMD ["/usr/bin/httpd", "-f", "-p", "8000", "-h", "/www"]
+CMD ["httpd", "-f", "-v", "-p", "8000", "-h", "/www"]
