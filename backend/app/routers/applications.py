@@ -226,13 +226,23 @@ def deploy_to_dev(
     }
 
     container = client.V1Container(
-        name=application.name,
-        image=image,
-        ports=[
-            client.V1ContainerPort(
-                container_port=8000
-            )
-        ],
+    name=application.name,
+    image=image,
+    ports=[
+        client.V1ContainerPort(
+            container_port=8000
+        )
+    ],
+    resources=client.V1ResourceRequirements(
+        requests={
+            "cpu": "100m",
+            "memory": "64Mi"
+        },
+        limits={
+            "cpu": "500m",
+            "memory": "256Mi"
+        }
+    ),
 
         startup_probe=client.V1Probe(
             http_get=client.V1HTTPGetAction(
@@ -424,7 +434,20 @@ def promote_application(
     namespace = promote.target_environment
     deployment_name = application.name
     version = source_environment.current_version
-    image = f"{application.repository}:{version}"
+
+    build = db.query(Build).filter(
+        Build.application_id == application_id,
+        Build.jenkins_build_number == int(version),
+        Build.status == "SUCCESS"
+    ).first()
+
+    if not build or not build.image_uri:
+        raise HTTPException(
+            status_code=404,
+            detail="Successful build not found"
+        )
+
+    image = build.image_uri
 
     labels = {"app": application.name}
 
@@ -613,12 +636,23 @@ def rollback_application(
 
     namespace = environment.name
     deployment_name = application.name
-
     old_current_version = environment.current_version
     rollback_version = environment.previous_version
 
-    image = f"{application.repository}:{rollback_version}"
+    build = db.query(Build).filter(
+        Build.application_id == application_id,
+        Build.jenkins_build_number == int(rollback_version),
+        Build.status == "SUCCESS"
+    ).first()
 
+    if not build or not build.image_uri:
+        raise HTTPException(
+            status_code=404,
+            detail="Previous successful build not found"
+        )
+
+    image = build.image_uri
+    
     try:
         deployment = apps_v1.read_namespaced_deployment(
             name=deployment_name,
@@ -754,7 +788,7 @@ def update_scaling(
             detail="Scaling is currently supported only in dev"
         )
 
-    namespace = "dev"
+    namespace = environment.name
     deployment_name = application.name
 
     try:
