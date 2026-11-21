@@ -103,7 +103,7 @@ Built with **GKE, Terraform, FastAPI, PostgreSQL, Jenkins, GitHub Actions, Docke
                             |
                          Promote
                             v
-                       PROD Deployment
+                       PROD   
 ```
 
 The architecture uses a GKE Ingress manifest to configure Google Cloud Load Balancing. External availability requires successful Ingress provisioning and healthy backends.

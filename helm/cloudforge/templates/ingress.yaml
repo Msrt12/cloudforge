@@ -13,6 +13,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: cloudforge-backend
+                name: cloudforge
                 port:
                   number: 80
