@@ -18,3 +18,7 @@ app.include_router(applications.router)
 @app.get("/", include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
+
+@app.get("/healthz", include_in_schema=False)
+def health_check():
+    return {"status": "healthy"}
