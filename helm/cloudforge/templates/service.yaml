@@ -5,7 +5,7 @@ metadata:
   name: {{ .Release.Name }}
   namespace: platform
   annotations:
-    cloud.google.com/backend-config: '{"default": "cloudforge-backendconfig"}'
+    cloud.google.com/backend-config: '{"default":"cloudforge-backendconfig"}'
 
 spec:
   type: {{ .Values.service.type }}

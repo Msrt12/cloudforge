@@ -3,9 +3,10 @@ kind: BackendConfig
 metadata:
   name: cloudforge-backendconfig
   namespace: platform
-
 spec:
   healthCheck:
     type: HTTP
     requestPath: /healthz
-    port: 80
+    port: 8000
+    checkIntervalSec: 15
+    timeoutSec: 5
