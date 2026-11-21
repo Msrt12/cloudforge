@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from .database import Base, engine
 from . import models
@@ -14,8 +15,6 @@ app = FastAPI(
 app.include_router(applications.router)
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
-    return {
-        "message": "CloudForge API is running"
-    }
+    return RedirectResponse(url="/docs")
