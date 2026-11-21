@@ -8,4 +8,4 @@ spec:
   healthCheck:
     type: HTTP
     requestPath: /healthz
-    port: 8000
+    port: 80
